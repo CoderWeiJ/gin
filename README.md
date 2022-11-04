@@ -131,3 +131,14 @@ func (c *Context) HTML(code int, html string) {
 
 # 路由（Router）
 将和路由相关的方法和结构体提取出来，方便扩展新功能
+
+# 前缀树路由
+树节点应该存储的信息
+```go
+type node struct {
+	pattern  string  // 待匹配路由，例如 /p/:lang
+	part     string  // 路由中的一部分，例如 :lang
+	children []*node // 子节点，例如 [doc, tutorial, intro]
+	isWild   bool    // 是否精确匹配，part 含有 : 或 * 时为true
+}
+```
