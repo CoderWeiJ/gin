@@ -24,6 +24,7 @@ type Context struct {
 	// middleware
 	handlers []HandlerFunc
 	index    int
+	engine   *Engine
 }
 
 // newContext 创建Context实例
@@ -84,16 +85,23 @@ func (c *Context) Data(code int, data []byte) {
 }
 
 // HTML 把HTML文本返回
-func (c *Context) HTML(code int, html string) {
+func (c *Context) HTML(code int, name string, data interface{}) {
 	c.SetHeader("Content-Type", "text/html")
 	c.Status(code)
-	c.Writer.Write([]byte(html))
+	if err := c.engine.htmlTemplates.ExecuteTemplate(c.Writer, name, data); err != nil {
+		c.Fail(500, err.Error())
+	}
 }
 
 // Param 获取存储的路由参数
 func (c *Context) Param(key string) string {
 	value, _ := c.Params[key]
 	return value
+}
+
+func (c *Context) Fail(code int, err error) {
+	c.index = len(c.handlers)
+	c.JSON(code, H{"message": err})
 }
 
 // Next 中间件放行，按顺序执行所有的中间件

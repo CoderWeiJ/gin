@@ -1,8 +1,10 @@
 package gin
 
 import (
+	"html/template"
 	"log"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 )
@@ -22,8 +24,10 @@ type (
 	// 拥有 RouterGroup 所有的能力
 	Engine struct {
 		*RouterGroup
-		router *router // 路由映射表
-		groups []*RouterGroup
+		router        *router // 路由映射表
+		groups        []*RouterGroup
+		htmlTemplates *template.Template // 将所有的模板加载进内存
+		funcMap       template.FuncMap   // 自定义模板渲染函数
 	}
 )
 
@@ -66,6 +70,28 @@ func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
 	group.middlewares = append(group.middlewares, middlewares...)
 }
 
+// createStaticHandler 创建静态资源
+func (group *RouterGroup) createStaticHandler(relativePath string, fs http.FileSystem) HandlerFunc {
+	absolutePath := path.Join(group.prefix, relativePath)
+	fileServer := http.StripPrefix(absolutePath, http.FileServer(fs))
+	return func(c *Context) {
+		file := c.Param("filepath")
+		// 检查文件是否存在/有无权限
+		if _, err := fs.Open(file); err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		fileServer.ServeHTTP(c.Writer, c.Req)
+	}
+}
+
+func (group *RouterGroup) Static(relativePath, root string) {
+	handler := group.createStaticHandler(relativePath, http.Dir(root))
+	urlPattern := path.Join(relativePath, "/*filepath")
+	// 注册 Get 方法
+	group.GET(urlPattern, handler)
+}
+
 // GET 注册到路由映射表
 func (e *Engine) GET(pattern string, handler HandlerFunc) {
 	e.router.addRoute("GET", pattern, handler)
@@ -81,6 +107,14 @@ func (e *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, e)
 }
 
+func (e *Engine) SetFuncMap(funcMap template.FuncMap) {
+	e.funcMap = funcMap
+}
+
+func (e *Engine) LoadHTMLGlob(pattern string) {
+	e.htmlTemplates = template.Must(template.New("").Funcs(e.funcMap).ParseGlob(pattern))
+}
+
 // ServeHTTP 解析请求的路径，查找路由映射表
 func (e *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	var middlewares []HandlerFunc
@@ -91,6 +125,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	c := newContext(w, req)
 	c.handlers = middlewares
+	c.engine = e
 	e.router.handle(c)
 }
 
