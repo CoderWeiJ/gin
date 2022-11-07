@@ -21,6 +21,9 @@ type Context struct {
 	Params map[string]string // 提供对路由参数的访问
 	// response info
 	StatusCode int
+	// middleware
+	handlers []HandlerFunc
+	index    int
 }
 
 // newContext 创建Context实例
@@ -30,6 +33,9 @@ func newContext(w http.ResponseWriter, req *http.Request) *Context {
 		Req:    req,
 		Path:   req.URL.Path,
 		Method: req.Method,
+		// index 记录当前执行到第几个中间件，调用Next()方法将控制权交给下一个中间件
+		// 然后再从后往前，调用每个中间件在 Next 方法之后定义的部分。
+		index: -1,
 	}
 }
 
@@ -88,4 +94,13 @@ func (c *Context) HTML(code int, html string) {
 func (c *Context) Param(key string) string {
 	value, _ := c.Params[key]
 	return value
+}
+
+// Next 中间件放行，按顺序执行所有的中间件
+func (c *Context) Next() {
+	c.index++
+	s := len(c.handlers)
+	for ; c.index < s; c.index++ {
+		c.handlers[c.index](c)
+	}
 }

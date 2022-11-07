@@ -3,6 +3,8 @@ package gin
 import (
 	"log"
 	"net/http"
+	"strings"
+	"time"
 )
 
 // HandlerFunc 定义了gin的请求方法
@@ -30,6 +32,7 @@ func New() *Engine {
 	engine := &Engine{router: newRouter()}
 	engine.RouterGroup = &RouterGroup{engine: engine}
 	engine.groups = []*RouterGroup{engine.RouterGroup}
+	engine.Use(Logger())
 	return engine
 }
 
@@ -58,6 +61,11 @@ func (group *RouterGroup) POST(pattern string, handler HandlerFunc) {
 	group.addRoute("POST", pattern, handler)
 }
 
+// Use 注册中间件
+func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, middlewares...)
+}
+
 // GET 注册到路由映射表
 func (e *Engine) GET(pattern string, handler HandlerFunc) {
 	e.router.addRoute("GET", pattern, handler)
@@ -75,6 +83,25 @@ func (e *Engine) Run(addr string) (err error) {
 
 // ServeHTTP 解析请求的路径，查找路由映射表
 func (e *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	for _, group := range e.groups {
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
 	c := newContext(w, req)
+	c.handlers = middlewares
 	e.router.handle(c)
+}
+
+// Logger 全局默认注册的中间件
+func Logger() HandlerFunc {
+	return func(c *Context) {
+		// Start timer
+		t := time.Now()
+		// Process request
+		c.Next()
+		// Calculate resolution time
+		log.Printf("[%d] %s in %v", c.StatusCode, c.Req.RequestURI, time.Since(t))
+	}
 }
