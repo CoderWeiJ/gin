@@ -36,8 +36,13 @@ func New() *Engine {
 	engine := &Engine{router: newRouter()}
 	engine.RouterGroup = &RouterGroup{engine: engine}
 	engine.groups = []*RouterGroup{engine.RouterGroup}
-	engine.Use(Logger())
 	return engine
+}
+
+func Default() *Engine {
+	r := New()
+	r.Use(Logger(), Recovery())
+	return r
 }
 
 func (group *RouterGroup) Group(prefix string) *RouterGroup {

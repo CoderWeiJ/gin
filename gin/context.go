@@ -99,7 +99,7 @@ func (c *Context) Param(key string) string {
 	return value
 }
 
-func (c *Context) Fail(code int, err error) {
+func (c *Context) Fail(code int, err string) {
 	c.index = len(c.handlers)
 	c.JSON(code, H{"message": err})
 }
